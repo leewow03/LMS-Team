@@ -1,0 +1,24 @@
+name: Notion Sync Bot
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  run-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install libraries
+        run: pip install PyGithub notion-client
+      - name: Run script
+        env:
+          # 시크릿 금고에서 값을 꺼내 파이썬으로 전달하는 연결고리입니다
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+          REPO_NAME: ${{ secrets.REPO_NAME }}
+        run: python intergrate  # 파일 이름이 intergrate라면 이렇게 적으세요!
