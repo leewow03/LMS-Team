@@ -34,11 +34,12 @@ def get_page_id_by_task_id(task_id_number):
     
     # 노션 API는 고유 ID를 찾을 때 접두어(SCH-)를 떼고 '숫자'로만 검색해야 합니다.
     payload = {
-        "filter": {
-            "property": "ID",  # ⚠️ 노션의 열 이름이 'ID'가 맞는지 꼭 확인!
-            "unique_id": {"equals": int(task_id_number)} 
+    "filter": {
+        "property": "ID",
+        "unique_id": {
+            "equals": int(task_id_number)
         }
-
+    }
     }
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
