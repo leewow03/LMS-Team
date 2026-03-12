@@ -30,7 +30,7 @@ def get_page_id_by_task_id(task_id_number):
     """
     task_id_number: '5' 같은 숫자 형태의 문자열이 들어옵니다.
     """
-    url = f"https://api.notion.com/v1/databases/{https://www.notion.so/321aebc195c180eb872cd1d46657a8cd?v=321aebc195c180cf9c46000cb66fb64b&source=copy_link}/query"
+    url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
     
     # 노션 API는 고유 ID를 찾을 때 접두어(SCH-)를 떼고 '숫자'로만 검색해야 합니다.
     payload = {
