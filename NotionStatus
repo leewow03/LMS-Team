@@ -70,10 +70,10 @@ def process_commit_message(commit_message):
     
     print(f"🔍 커밋 메시지 분석 중: {commit_message}")
     
-    # [MBC-번호] 추출
-    task_match = re.search(r"MBC-(\d+)", commit_message.upper())
+    # [SCH-번호] 추출
+    task_match = re.search(r"SCH-(\d+)", commit_message.upper())
     if not task_match: 
-        print("ℹ️ 커밋 메시지에서 'MBC-번호'를 찾지 못해 상태를 변경하지 않습니다.")
+        print("ℹ️ 커밋 메시지에서 'SCH-번호'를 찾지 못해 상태를 변경하지 않습니다.")
         return
         
     task_number = task_match.group(1)
