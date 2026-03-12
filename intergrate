@@ -27,13 +27,18 @@ headers = {
 }
 
 def get_page_id_by_task_id(task_id_number):
-    """노션에서 ID 번호(예: 5)를 가진 페이지의 진짜 주소를 찾는 함수"""
-    url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
+    """
+    task_id_number: '5' 같은 숫자 형태의 문자열이 들어옵니다.
+    """
+    url = f"https://api.notion.com/v1/databases/{https://www.notion.so/321aebc195c180eb872cd1d46657a8cd?v=321aebc195c180cf9c46000cb66fb64b&source=copy_link}/query"
+    
+    # 노션 API는 고유 ID를 찾을 때 접두어(SCH-)를 떼고 '숫자'로만 검색해야 합니다.
     payload = {
         "filter": {
-            "property": "ID", 
-            "unique_id": {"equals": int(task_id_number)}
+            "property": "ID",  # ⚠️ 노션의 열 이름이 'ID'가 맞는지 꼭 확인!
+            "unique_id": {"equals": int(task_id_number)} 
         }
+
     }
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
