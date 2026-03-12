@@ -1,0 +1,40 @@
+import os
+from github import Github
+from notion_client import Client
+
+# 1. 깃허브 금고(Secrets)에서 값들을 가져옵니다.
+# 괄호 안의 이름은 Secrets에 등록한 이름과 똑같아야 합니다.
+GH_TOKEN = os.environ.get("GH_TOKEN")
+NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
+NOTION_DB_ID = os.environ.get("NOTION_DB_ID")
+REPO_NAME = os.environ.get("REPO_NAME")
+
+def sync_to_notion():
+    try:
+        # 2. 서비스 연결
+        g = Github(GH_TOKEN)
+        notion = Client(auth=NO_TOKEN)
+        repo = g.get_repo(REPO_NAME)
+
+        # 3. 가장 최근 커밋 정보 추출
+        commit = repo.get_commits()[0]
+        msg = commit.commit.message
+        author = commit.commit.author.name
+        url = commit.html_url
+
+        # 4. 노션 데이터베이스에 데이터 추가
+        notion.pages.create(
+            parent={"database_id": DB_ID},
+            properties={
+                "Name": {"title": [{"text": {"content": msg}}]},
+                "Author": {"rich_text": [{"text": {"content": author}}]},
+                "URL": {"url": url}
+            }
+        )
+        print(f"🚀 성공! '{msg}' 커밋이 노션에 기록되었습니다.")
+        
+    except Exception as e:
+        print(f"❌ 에러 발생: {e}")
+
+if __name__ == "__main__":
+    sync_to_notion()
