@@ -1,7 +1,7 @@
 import os
 import re
 import json
-import requests # 라이브러리 대신 표준 requests 사용
+import requests
 from github import Github, Auth
 
 # 환경 변수 설정
@@ -19,44 +19,45 @@ STATUS_MAP = {
     "#done": "완료"
 }
 
-# 노션 API 공통 헤더
 HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
     "Content-Type": "application/json",
     "Notion-Version": "2022-06-28"
-}def update_task_status(msg):
+}
+
+def update_task_status(msg):
     found_status = next((status for key, status in STATUS_MAP.items() if key in msg), None)
     match = re.search(r'STA-\d+', msg)
     
     if not found_status or not match:
-        print("ℹ️ 메시지에서 업데이트 대상을 찾지 못했습니다.")
+        print("ℹ️ 메시지에서 업데이트 대상(STA-ID 또는 키워드)을 찾지 못했습니다.")
         return
 
     task_id = match.group()
     clean_db_id = NOTION_STATUS_DB_ID.strip().replace("-", "")
     
-    print(f"⚙️ [상태 DB] '{task_id}' 찾기 시도 중...")
+    print(f"⚙️ [상태 DB] '{task_id}' 찾기 시도 중... (DB ID: {clean_db_id[:5]}...)")
     
     try:
         query_url = f"https://api.notion.com/v1/databases/{clean_db_id}/query"
-        # 필터를 잠시 빼고 전체 항목을 가져와서 비교해봅니다 (디버깅용)
+        # 1. 일단 필터 없이 전체를 가져와서 권한과 데이터가 있는지 확인합니다.
         res = requests.post(query_url, headers=HEADERS, json={})
-        data = res.json()
         
         if res.status_code != 200:
-            print(f"❌ DB 조회 실패: {res.text}")
+            print(f"❌ DB 조회 실패 (권한 또는 ID 문제): {res.text}")
             return
 
-        target_page_id = None
+        data = res.json()
         results = data.get('results', [])
-        
-        # 전체 목록에서 ID 값을 대조해봅니다.
+        print(f"📊 현재 DB에서 불러온 항목 수: {len(results)}개")
+
+        target_page_id = None
         for page in results:
             props = page.get('properties', {})
-            # 'ID'라는 이름의 속성을 찾습니다.
-            id_prop = props.get('ID', {}).get('rich_text', [])
-            if id_prop:
-                actual_id = id_prop[0].get('plain_text', '').strip()
+            # 'ID' 속성의 텍스트 값을 추출하여 대조
+            id_data = props.get('ID', {}).get('rich_text', [])
+            if id_data:
+                actual_id = id_data[0].get('plain_text', '').strip()
                 if actual_id == task_id:
                     target_page_id = page['id']
                     break
@@ -70,36 +71,8 @@ HEADERS = {
             }
             res_up = requests.patch(update_url, headers=HEADERS, json=update_payload)
             if res_up.status_code == 200:
-                print(f"✅ [상태 DB] '{task_id}' 업데이트 완료!")
+                print(f"✅ [상태 DB] '{task_id}' 항목을 '{found_status}'로 업데이트 완료!")
             else:
-                print(f"❌ 업데이트 실패: {res_up.text}")
+                print(f"❌ 상태 변경 실패: {res_up.text}")
         else:
-            print(f"⚠️ '{task_id}' 항목을 DB에서 찾지 못했습니다. (현재 DB에 있는 항목 수: {len(results)}개)")
-            
-    except Exception as e:
-        print(f"⚠️ 상태 DB 오류 상세: {e}")
-
-def sync_to_notion():
-    try:
-        auth = Auth.Token(GH_TOKEN)
-        g = Github(auth=auth)
-        repo = g.get_repo(REPO_NAME)
-        commits = repo.get_commits()
-
-        if commits.totalCount == 0:
-            return
-
-        latest_commit = commits[0]
-        msg = latest_commit.commit.message
-        author = latest_commit.commit.author.name
-        url = latest_commit.html_url
-        date = latest_commit.commit.author.date.isoformat()
-        
-        commit_to_notion(msg, author, url, date)
-        update_task_status(msg)
-        
-    except Exception as e:
-        print(f"❌ 전체 프로세스 에러: {e}")
-
-if __name__ == "__main__":
-    sync_to_notion()
+            print(f"⚠️ '{task_id}'와
