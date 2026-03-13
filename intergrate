@@ -37,22 +37,22 @@ def update_task_status(msg):
     
     try:
     # 1. ID가 일치하는 페이지 조회
-    query = notion.databases.query(
-        database_id=NOTION_STATUS_DB_ID,
-        filter={"property": "ID", "rich_text": {"equals": task_id}}
-    )
-    
-    if query['results']:
-        page_id = query['results'][0]['id']
-        # 2. 상태 업데이트
-        notion.pages.update(
-            page_id=page_id,
-            properties={"Status": {"status": {"name": found_status}}}
+        query = notion.databases.query(
+            database_id=NOTION_STATUS_DB_ID,
+            filter={"property": "ID", "rich_text": {"equals": task_id}}
         )
-        print(f"✅ [상태 DB] 업데이트 완료!")
-
-except Exception as e:
-    print(f"⚠️ 상태 DB 업데이트 오류: {e}")
+        
+        if query['results']:
+            page_id = query['results'][0]['id']
+            # 2. 상태 업데이트
+            notion.pages.update(
+                page_id=page_id,
+                properties={"Status": {"status": {"name": found_status}}}
+            )
+            print(f"✅ [상태 DB] 업데이트 완료!")
+    
+    except Exception as e:
+        print(f"⚠️ 상태 DB 업데이트 오류: {e}")
 
 def commit_to_notion(msg, author, url, date): 
     """
