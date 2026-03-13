@@ -18,7 +18,7 @@ STATUS_MAP = {
     "#done": "완료"
 }
 
-def update_task_status(notion, msg): # notion 객체를 인자로 받음
+def update_task_status(notion, msg):
     found_status = next((status for key, status in STATUS_MAP.items() if key in msg), None)
     match = re.search(r'STA-\d+', msg)
     
@@ -29,16 +29,31 @@ def update_task_status(notion, msg): # notion 객체를 인자로 받음
     print(f"⚙️ [상태 DB] '{task_id}' -> '{found_status}' 업데이트 시도...")
     
     try:
-        query = notion.databases.query(
-            database_id=NOTION_STATUS_DB_ID,
-            filter={"property": "ID", "rich_text": {"equals": task_id}}
+        # 라이브러리 버전과 상관없이 작동하는 직접 호출(Request) 방식입니다.
+        response = notion.request(
+            path=f"databases/{NOTION_STATUS_DB_ID}/query",
+            method="POST",
+            body={
+                "filter": {
+                    "property": "ID",
+                    "rich_text": {"equals": task_id}
+                }
+            }
         )
         
-        if query.get('results'):
-            page_id = query['results'][0]['id']
-            notion.pages.update(
-                page_id=page_id,
-                properties={"상태": {"select": {"name": found_status}}}
+        results = response.get("results", [])
+        
+        if results:
+            page_id = results[0]['id']
+            # 상태 업데이트도 직접 호출 방식으로 처리합니다.
+            notion.request(
+                path=f"pages/{page_id}",
+                method="PATCH",
+                body={
+                    "properties": {
+                        "상태": {"select": {"name": found_status}}
+                    }
+                }
             )
             print(f"✅ [상태 DB] 업데이트 완료!")
         else:
