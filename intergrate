@@ -45,13 +45,18 @@ def update_task_status(msg):
             filter={"property": "ID", "rich_text": {"equals": task_id}}
         )
         
-        if query['results']:
-            page_id = query['results'][0]['id']
-            # 2. 상태 업데이트
-            notion.pages.update(
-                page_id=page_id,
-                properties={"Status": {"status": {"name": found_status}}}
-            )
+        if query['results']:# query = notion.databases.query(...)
+     query = notion.databases.query(
+    **{
+        "database_id": NOTION_STATUS_DB_ID,
+        "filter": {
+            "property": "ID",
+            "rich_text": {
+                "equals": task_id
+            }
+        }
+    }
+)
             print(f"✅ [상태 DB] 업데이트 완료!")
     
     except Exception as e:
