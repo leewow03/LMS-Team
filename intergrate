@@ -1,7 +1,8 @@
 import os
 import re
+import json
+import requests # 라이브러리 대신 표준 requests 사용
 from github import Github, Auth
-from notion_client import Client
 
 # 환경 변수 설정
 GH_TOKEN = os.environ.get("GH_TOKEN")
@@ -18,92 +19,88 @@ STATUS_MAP = {
     "#done": "완료"
 }
 
-def update_task_status(notion, msg):
+# 노션 API 공통 헤더
+HEADERS = {
+    "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Content-Type": "application/json",
+    "Notion-Version": "2022-06-28"
+}
+
+def update_task_status(msg):
     found_status = next((status for key, status in STATUS_MAP.items() if key in msg), None)
     match = re.search(r'STA-\d+', msg)
     
     if not found_status or not match:
-        print("ℹ️ 업데이트할 상태 키워드나 STA-ID가 메시지에 없습니다.")
         return
 
     task_id = match.group()
+    clean_db_id = NOTION_STATUS_DB_ID.strip().replace("-", "")
     
-    # DB ID에서 불필요한 공백과 하이픈 제거 (32자리 순수 ID 추출)
-    raw_id = (NOTION_STATUS_DB_ID or "").strip()
-    clean_db_id = raw_id.split('/')[-1].split('?')[0].replace('-', '')
-    
-    print(f"⚙️ [상태 DB] '{task_id}' -> '{found_status}' 업데이트 시도 (DB: {clean_db_id[:5]}...)")
+    print(f"⚙️ [상태 DB] '{task_id}' -> '{found_status}' 업데이트 시도...")
     
     try:
-        # [핵심] 라이브러리 구조를 무시하고 직접 HTTP 요청을 보냅니다.
-        # 이 방식은 'DatabasesEndpoint' 에러를 원천 봉쇄합니다.
-        response = notion.request(
-            path=f"databases/{clean_db_id}/query",
-            method="POST",
-            body={
-                "filter": {
-                    "property": "ID",
-                    "rich_text": {"equals": task_id}
+        # 1. 항목 조회 (Query)
+        query_url = f"https://api.notion.com/v1/databases/{clean_db_id}/query"
+        payload = {
+            "filter": {
+                "property": "ID",
+                "rich_text": {"equals": task_id}
+            }
+        }
+        
+        res = requests.post(query_url, headers=HEADERS, json=payload)
+        data = res.json()
+        
+        if res.status_code == 200 and data.get('results'):
+            page_id = data['results'][0]['id']
+            # 2. 상태 업데이트 (Update)
+            update_url = f"https://api.notion.com/v1/pages/{page_id}"
+            update_payload = {
+                "properties": {
+                    "상태": {"select": {"name": found_status}}
                 }
             }
-        )
-        
-        results = response.get("results", [])
-        
-        if results:
-            page_id = results[0]['id']
-            # 페이지 업데이트도 직접 호출 방식으로 진행
-            notion.request(
-                path=f"pages/{page_id}",
-                method="PATCH",
-                body={
-                    "properties": {
-                        "상태": {"select": {"name": found_status}}
-                    }
-                }
-            )
-            print(f"✅ [상태 DB] 업데이트 완료!")
+            res_up = requests.patch(update_url, headers=HEADERS, json=update_payload)
+            
+            if res_up.status_code == 200:
+                print(f"✅ [상태 DB] 업데이트 완료!")
+            else:
+                print(f"❌ 업데이트 실패: {res_up.text}")
         else:
-            print(f"⚠️ '{task_id}' 항목을 찾을 수 없습니다. (DB의 ID 열을 확인하세요)")
+            print(f"⚠️ '{task_id}' 항목을 찾지 못했습니다. (Status: {res.status_code})")
             
     except Exception as e:
-        print(f"⚠️ 상태 DB 업데이트 오류 상세: {e}")
+        print(f"⚠️ 상태 DB 오류 상세: {e}")
 
-def commit_to_notion(notion, msg, author, url, date):
+def commit_to_notion(msg, author, url, date):
     try:
         clean_log_db_id = NOTION_DB_ID.strip().replace("-", "")
-        notion.request(
-            path="pages",
-            method="POST",
-            body={
-                "parent": {"database_id": clean_log_db_id},
-                "properties": {
-                    "Name": {"title": [{"text": {"content": msg}}]},
-                    "Author": {"rich_text": [{"text": {"content": author}}]},
-                    "URL": {"url": url},
-                    "Date": {"date": {"start": date}} 
-                }
+        create_url = "https://api.notion.com/v1/pages"
+        payload = {
+            "parent": {"database_id": clean_log_db_id},
+            "properties": {
+                "Name": {"title": [{"text": {"content": msg}}]},
+                "Author": {"rich_text": [{"text": {"content": author}}]},
+                "URL": {"url": url},
+                "Date": {"date": {"start": date}} 
             }
-        )
-        print(f"🚀 [로그 DB] 커밋 기록 완료: '{msg}'")
+        }
+        res = requests.post(create_url, headers=HEADERS, json=payload)
+        if res.status_code == 200:
+            print(f"🚀 [로그 DB] 커밋 기록 완료: '{msg}'")
+        else:
+            print(f"❌ 로그 DB 기록 실패: {res.text}")
     except Exception as e:
-        print(f"⚠️ 로그 DB 기록 오류: {e}")
+        print(f"⚠️ 로그 DB 오류: {e}")
 
 def sync_to_notion():
     try:
-        if not NOTION_TOKEN:
-            print("❌ NOTION_TOKEN이 설정되지 않았습니다.")
-            return
-
-        notion = Client(auth=NOTION_TOKEN)
-        
         auth = Auth.Token(GH_TOKEN)
         g = Github(auth=auth)
         repo = g.get_repo(REPO_NAME)
         commits = repo.get_commits()
 
         if commits.totalCount == 0:
-            print("⚠️ 커밋 기록이 없습니다.")
             return
 
         latest_commit = commits[0]
@@ -112,8 +109,8 @@ def sync_to_notion():
         url = latest_commit.html_url
         date = latest_commit.commit.author.date.isoformat()
         
-        commit_to_notion(notion, msg, author, url, date)
-        update_task_status(notion, msg)
+        commit_to_notion(msg, author, url, date)
+        update_task_status(msg)
         
     except Exception as e:
         print(f"❌ 전체 프로세스 에러: {e}")
