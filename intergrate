@@ -1,14 +1,13 @@
 import os
 import re
-from github import Github, Auth  
+from github import Github, Auth
 from notion_client import Client
 
 # 1. 환경 변수 설정
 GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
-# 데이터베이스 ID 분리
-NOTION_DB_ID = os.environ.get("NOTION_DB_ID")         # 커밋저장용 DB
-NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID")   # 작업 상태 관리용 DB
+NOTION_DB_ID = os.environ.get("NOTION_DB_ID")           # 커밋 로그 저장용 DB
+NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID")  # 작업 상태 관리용 DB
 REPO_NAME = os.environ.get("REPO_NAME")
 
 # 상태 매핑 (커밋 키워드: 노션의 상태 속성값)
@@ -22,52 +21,50 @@ STATUS_MAP = {
 
 notion = Client(auth=NOTION_TOKEN)
 
-
 def update_task_status(msg):
     """
-    상태 관리 DB(NOTION_STATUS_DB_ID)에서 'ID'가 일치하는 항목을 찾아 상태를 업데이트합니다.
+    상태 관리 DB에서 'ID'가 일치하는 항목을 찾아 상태를 업데이트합니다.
     """
+    # 1. 메시지에서 상태 키워드 및 ID 추출
     found_status = next((status for key, status in STATUS_MAP.items() if key in msg), None)
-    if not found_status:
-        return
-
     match = re.search(r'STA-\d+', msg)
-    if not match:
+    
+    if not found_status or not match:
         return
 
     task_id = match.group()
-    print(f"⚙️ [상태 DB] '{task_id}' 항목을 '{found_status}'(으)로 변경 시도...")
+    print(f"⚙️ [상태 DB] '{task_id}' 항목을 '{found_status}'(으)로 업데이트 시도...")
     
     try:
-    # 1. ID가 일치하는 페이지 조회
+        # 2. ID가 일치하는 페이지 조회
         query = notion.databases.query(
             database_id=NOTION_STATUS_DB_ID,
             filter={"property": "ID", "rich_text": {"equals": task_id}}
         )
         
-        if query['results']:# query = notion.databases.query(...)
-     query = notion.databases.query(
-    **{
-        "database_id": NOTION_STATUS_DB_ID,
-        "filter": {
-            "property": "ID",
-            "rich_text": {
-                "equals": task_id
-            }
-        }
-    }
-)
+        if query['results']:
+            page_id = query['results'][0]['id']
+            
+            # 3. 실제 페이지 상태 업데이트
+            # 주의: "상태"는 본인의 노션 속성 이름에 맞춰 수정하세요!
+            notion.pages.update(
+                page_id=page_id,
+                properties={
+                    "상태": {"select": {"name": found_status}} 
+                }
+            )
             print(f"✅ [상태 DB] 업데이트 완료!")
-    
+        else:
+            print(f"⚠️ 일치하는 '{task_id}' 항목을 찾을 수 없습니다.")
+            
     except Exception as e:
         print(f"⚠️ 상태 DB 업데이트 오류: {e}")
 
 def commit_to_notion(msg, author, url, date): 
     """
-    커밋 로그 DB(NOTION_DB_ID)에 커밋 내역을 추가합니다.
+    커밋 로그 DB에 커밋 내역을 추가합니다.
     """
     try:
-        notion = Client(auth=NOTION_TOKEN)
         notion.pages.create(
             parent={"database_id": NOTION_DB_ID},
             properties={
