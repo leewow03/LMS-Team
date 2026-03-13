@@ -7,7 +7,7 @@ from notion_client import Client
 GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 # 데이터베이스 ID 분리
-NOTION_DB_ID = os.environ.get("NOTION_DB_ID")         # 커밋 저장용 DB
+NOTION_DB_ID = os.environ.get("NOTION_DB_ID")         # 커밋저장용 DB
 NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID")   # 작업 상태 관리용 DB
 REPO_NAME = os.environ.get("REPO_NAME")
 
