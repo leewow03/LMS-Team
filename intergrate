@@ -37,14 +37,14 @@ def update_task_status(msg):
     
     # 💡 여기서 들여쓰기를 정확히 맞춰야 합니다 (보통 스페이스 4칸)
     try:
-        notion = Client(auth=NOTION_TOKEN) # notion 클라이언트가 여기서 선언되어야 합니다
-               query = notion.databases.query(
-            database_id=NOTION_STATUS_DB_ID,
-            filter={
-                "property": "ID",
-                "rich_text": {"equals": task_id}
-            }
-        )
+            notion = Client(auth=NOTION_TOKEN) # notion 클라이언트가 여기서 선언되어야 합니다
+                   query = notion.databases.query(
+                database_id=NOTION_STATUS_DB_ID,
+                filter={
+                    "property": "ID",
+                    "rich_text": {"equals": task_id}
+                }
+            )
         
         if query['results']:
             page_id = query['results'][0]['id']
