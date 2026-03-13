@@ -26,12 +26,16 @@ def update_task_status(notion, msg):
         return
 
     task_id = match.group()
+    
+    # DB ID에서 하이픈 제거 및 순수 ID만 추출 (URL로 들어올 경우 대비)
+    clean_db_id = NOTION_STATUS_DB_ID.replace("-", "").split("/")[-1].split("?")[0]
+    
     print(f"⚙️ [상태 DB] '{task_id}' -> '{found_status}' 업데이트 시도...")
     
     try:
-        # 라이브러리 버전과 상관없이 작동하는 직접 호출(Request) 방식입니다.
+        # path 부분을 더 명확하게 작성합니다.
         response = notion.request(
-            path=f"databases/{NOTION_STATUS_DB_ID}/query",
+            path=f"databases/{clean_db_id}/query",
             method="POST",
             body={
                 "filter": {
