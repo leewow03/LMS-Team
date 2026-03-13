@@ -13,15 +13,10 @@ def sync_to_notion():
     try:
         # 2. 서비스 연결
         g = Github(GH_TOKEN)
-        notion = Client(auth=NO_TOKEN)
+        notion = Client(auth=NOTION_TOKEN)
         repo = g.get_repo(REPO_NAME)
 
-        # 3. 가장 최근 커밋 정보 추출
-        commit = repo.get_commits()[0]
-        msg = commit.commit.message
-        author = commit.commit.author.name
-        url = commit.html_url
-
+      
         # 4. 노션 데이터베이스에 데이터 추가
         notion.pages.create(
             parent={"database_id": DB_ID},
@@ -29,6 +24,7 @@ def sync_to_notion():
                 "Name": {"title": [{"text": {"content": msg}}]},
                 "Author": {"rich_text": [{"text": {"content": author}}]},
                 "URL": {"url": url}
+                "Date": {"date": {"start": date}} 
             }
         )
         print(f"🚀 성공! '{msg}' 커밋이 노션에 기록되었습니다.")
