@@ -45,7 +45,7 @@ def update_task_status(msg):
         results = res.json().get('results', [])
 
         if not results:
-            print(f"ℹ️ {match.group()}에 해당하는 페이지가 없습니다.")
+            print(f" {match.group()}에 해당하는 페이지가 없습니다.")
             return
 
         target_page_id = results[0]['id']
@@ -58,12 +58,12 @@ def update_task_status(msg):
         
         res_up = requests.patch(update_url, headers=HEADERS, json=update_payload)
         if res_up.status_code == 200:
-            print(f"✅ [{match.group()}] 상태 업데이트 완료: {found_status}")
+            print(f"[{match.group()}] 상태 업데이트 완료: {found_status}")
         else:
-            print(f"❌ 업데이트 실패: {res_up.text}")
+            print(f" 실패: {res_up.text}")
             
     except Exception as e:
-        print(f"⚠️ 에러 발생: {e}")
+        print(f" 에러 발생: {e}")
 
 def commit_to_notion(msg, author, url, date):
     try:
@@ -80,9 +80,9 @@ def commit_to_notion(msg, author, url, date):
         }
         res = requests.post(create_url, headers=HEADERS, json=payload)
         if res.status_code == 200:
-            print(f"🚀 [로그 DB] 기록 완료")
+            print(f"[로그 DB] 기록 완료")
     except Exception as e:
-        print(f"⚠️ 로그 DB 오류: {e}")
+        print(f"로그 DB 오류: {e}")
 
 def sync_to_notion():
     try:
@@ -96,7 +96,7 @@ def sync_to_notion():
         update_task_status(msg)
         
     except Exception as e:
-        print(f"❌ 전체 프로세스 에러: {e}")
+        print(f"전체 프로세스 에러: {e}")
 
 if __name__ == "__main__":
     sync_to_notion()
