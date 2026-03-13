@@ -1,6 +1,5 @@
 import os
 import re
-import json
 import requests
 from github import Github, Auth
 
@@ -27,61 +26,41 @@ HEADERS = {
 
 def update_task_status(msg):
     found_status = next((status for key, status in STATUS_MAP.items() if key in msg), None)
-    match = re.search(r'STA-\d+', msg)
+    match = re.search(r'STA-(\d+)', msg)
     
     if not found_status or not match:
-        print("ℹ️ 업데이트 대상 없음")
         return
 
-    task_id = match.group() # 예: "STA-5"
+    task_number = match.group(1) # 숫자만 추출 (예: 5)
     clean_db_id = NOTION_STATUS_DB_ID.strip().replace("-", "")
     
     try:
+        # [최적화] 필터링을 통해 해당 ID를 가진 페이지만 즉시 조회
         query_url = f"https://api.notion.com/v1/databases/{clean_db_id}/query"
-        res = requests.post(query_url, headers=HEADERS, json={})
-        data = res.json()
-        results = data.get('results', [])
-
-        target_page_id = None
-        for page in results:
-            props = page.get('properties', {})
-            
-            # [수정] 고유 ID(unique_id) 유형에서 값 추출
-            # 노션 API에서 고유 ID는 'unique_id' 키 안에 'prefix'와 'number'로 나뉩니다.
-            uid_prop = props.get('ID', {}).get('unique_id', {})
-            if uid_prop:
-                prefix = uid_prop.get('prefix') or ""
-                number = uid_prop.get('number')
-                # 접두어와 숫자를 합쳐서 "STA-5" 형태를 만듭니다.
-                actual_full_id = f"{prefix}-{number}" if prefix else str(number)
-                
-                if actual_full_id == task_id:
-                    target_page_id = page['id']
-                    break
+        filter_payload = {
+            "filter": {"property": "ID", "unique_id": {"equals": int(task_number)}}
+        }
         
-        if target_page_id:
-            update_url = f"https://api.notion.com/v1/pages/{target_page_id}"
-            
-            # [수정] 'select' 대신 'status'를 사용합니다.
-            update_payload = {
-                "properties": {
-                    "상태": {
-                        "status": {
-                            "name": found_status
-                        }
-                    }
-                }
-            }
-            
-            res_up = requests.patch(update_url, headers=HEADERS, json=update_payload)
-            if res_up.status_code == 200:
-                print(f"✅ [상태 DB] {task_id} -> {found_status} 완료!")
-            else:
-                # 에러가 또 난다면 어떤 타입인지 출력해 확인합니다.
-                print(f"❌ 업데이트 실패: {res_up.text}")
-            
-    except Exception as e:
-        print(f"⚠️ 에러 발생: {e}")
+        res = requests.post(query_url, headers=HEADERS, json=filter_payload)
+        results = res.json().get('results', [])
+
+        if not results:
+            print(f"ℹ️ {match.group()}에 해당하는 페이지가 없습니다.")
+            return
+
+        target_page_id = results[0]['id']
+        
+        # 상태 업데이트
+        update_url = f"https://api.notion.com/v1/pages/{target_page_id}"
+        update_payload = {
+            "properties": {"상태": {"status": {"name": found_status}}}
+        }
+        
+        res_up = requests.patch(update_url, headers=HEADERS, json=update_payload)
+        if res_up.status_code == 200:
+            print(f"✅ [{match.group()}] 상태 업데이트 완료: {found_status}")
+        else:
+            print(f"❌ 업데이트 실패: {res_up.text}")
             
     except Exception as e:
         print(f"⚠️ 에러 발생: {e}")
@@ -101,33 +80,23 @@ def commit_to_notion(msg, author, url, date):
         }
         res = requests.post(create_url, headers=HEADERS, json=payload)
         if res.status_code == 200:
-            print(f"🚀 [로그 DB] 커밋 기록 완료: {msg}")
-        else:
-            print(f"❌ 로그 DB 기록 실패: {res.text}")
+            print(f"🚀 [로그 DB] 기록 완료")
     except Exception as e:
         print(f"⚠️ 로그 DB 오류: {e}")
 
 def sync_to_notion():
     try:
-        auth = Auth.Token(GH_TOKEN)
-        g = Github(auth=auth)
+        g = Github(auth=Auth.Token(GH_TOKEN))
         repo = g.get_repo(REPO_NAME)
-        commits = repo.get_commits()
-
-        if commits.totalCount == 0:
-            return
-
-        latest_commit = commits[0]
-        msg = latest_commit.commit.message
-        author = latest_commit.commit.author.name
-        url = latest_commit.html_url
-        date = latest_commit.commit.author.date.isoformat()
+        # 최신 커밋 1개만 가져오기
+        latest_commit = repo.get_commits()[0]
         
-        commit_to_notion(msg, author, url, date)
+        msg = latest_commit.commit.message
+        commit_to_notion(msg, latest_commit.commit.author.name, latest_commit.html_url, latest_commit.commit.author.date.isoformat())
         update_task_status(msg)
         
     except Exception as e:
-        print(f"❌ 전체 에러: {e}")
+        print(f"❌ 전체 프로세스 에러: {e}")
 
 if __name__ == "__main__":
     sync_to_notion()
