@@ -2,8 +2,7 @@ import os
 from github import Github
 from notion_client import Client
 
-# 1. 깃허브 금고(Secrets)에서 값들을 가져옵니다.
-# 괄호 안의 이름은 Secrets에 등록한 이름과 똑같아야 합니다.
+# 1. 깃허브 금고(Secrets)
 GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 NOTION_DB_ID = os.environ.get("NOTION_DB_ID")
@@ -17,7 +16,7 @@ def sync_to_notion():
         repo = g.get_repo(REPO_NAME)
 
       
-        # 4. 노션 데이터베이스에 데이터 추가
+        # 3. 노션 데이터베이스에 데이터 추가
         notion.pages.create(
             parent={"database_id": NOTION_DB_ID},
             properties={
@@ -27,7 +26,7 @@ def sync_to_notion():
                 "Date": {"date": {"start": date}} 
             }
         )
-        print(f"🚀 성공! '{msg}' 커밋이 노션에 기록되었습니다.")
+        print(f"🚀 성공! 커밋이 노션에 기록되었습니다.")
         
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
