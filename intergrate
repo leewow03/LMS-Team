@@ -3,15 +3,13 @@ import re
 from github import Github, Auth
 from notion_client import Client
 
-
 # 1. 환경 변수 설정
 GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
-NOTION_DB_ID = os.environ.get("NOTION_DB_ID")           # 커밋로그저장용 DB
-NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID")  # 작업 상태 관리용 DB
+NOTION_DB_ID = os.environ.get("NOTION_DB_ID")
+NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID")
 REPO_NAME = os.environ.get("REPO_NAME")
 
-# 상태 매핑 (커밋 키워드: 노션의 상태 속성값)
 STATUS_MAP = {
     "#idea": "아이디어",
     "#coding": "코딩중",
@@ -20,8 +18,7 @@ STATUS_MAP = {
     "#done": "완료"
 }
 
-def update_task_status(msg):
-    # 1. 메시지에서 상태 키워드 및 ID 추출
+def update_task_status(notion, msg): # notion 객체를 인자로 받음
     found_status = next((status for key, status in STATUS_MAP.items() if key in msg), None)
     match = re.search(r'STA-\d+', msg)
     
@@ -29,44 +26,27 @@ def update_task_status(msg):
         return
 
     task_id = match.group()
-    print(f"⚙️ [상태 DB] '{task_id}' 항목 업데이트 시도...")
+    print(f"⚙️ [상태 DB] '{task_id}' -> '{found_status}' 업데이트 시도...")
     
     try:
-        # notion.databases.query가 없다고 나올 때를 대비한 안전한 호출
-        # 만약 이래도 에러가 나면 라이브러리 자체가 잘못 설치된 것입니다.
-        db_query_func = getattr(notion.databases, "query", None)
-        
-        if db_query_func is None:
-            print("❌ 에러: 사용 중인 notion-client 패키지에 query 기능이 없습니다.")
-            return
-
-        query = db_query_func(
+        query = notion.databases.query(
             database_id=NOTION_STATUS_DB_ID,
-            filter={
-                "property": "ID",
-                "rich_text": {"equals": task_id}
-            }
+            filter={"property": "ID", "rich_text": {"equals": task_id}}
         )
         
         if query.get('results'):
             page_id = query['results'][0]['id']
             notion.pages.update(
                 page_id=page_id,
-                properties={
-                    "상태": {"select": {"name": found_status}} 
-                }
+                properties={"상태": {"select": {"name": found_status}}}
             )
             print(f"✅ [상태 DB] 업데이트 완료!")
         else:
-            print(f"⚠️ 일치하는 '{task_id}' 항목을 찾을 수 없습니다.")
-            
+            print(f"⚠️ '{task_id}' 항목을 찾을 수 없습니다.")
     except Exception as e:
         print(f"⚠️ 상태 DB 업데이트 오류 상세: {e}")
 
-def commit_to_notion(msg, author, url, date): 
-    """
-    커밋 로그 DB에 커밋 내역을 추가합니다.
-    """
+def commit_to_notion(notion, msg, author, url, date): # notion 객체를 인자로 받음
     try:
         notion.pages.create(
             parent={"database_id": NOTION_DB_ID},
@@ -83,6 +63,10 @@ def commit_to_notion(msg, author, url, date):
 
 def sync_to_notion():
     try:
+        # Notion 클라이언트 초기화
+        notion = Client(auth=NOTION_TOKEN)
+        
+        # GitHub 클라이언트 초기화
         auth = Auth.Token(GH_TOKEN)
         g = Github(auth=auth)
         repo = g.get_repo(REPO_NAME)
@@ -92,14 +76,17 @@ def sync_to_notion():
             print("⚠️ 커밋 기록이 없습니다.")
             return
 
-        commit = commits[0]
-        msg = commit.commit.message
+        latest_commit = commits[0]
+        msg = latest_commit.commit.message
+        author = latest_commit.commit.author.name
+        url = latest_commit.html_url
+        date = latest_commit.commit.author.date.isoformat()
         
-        # 1. 커밋 DB에 기록
-        commit_to_notion(msg, commit.commit.author.name, commit.html_url, commit.commit.author.date.isoformat())
+        # 1. 커밋 로그 기록 (notion 객체 전달)
+        commit_to_notion(notion, msg, author, url, date)
         
-        # 2. 상태 관리 DB 업데이트
-        update_task_status(msg)
+        # 2. 상태 업데이트 (notion 객체 전달)
+        update_task_status(notion, msg)
         
     except Exception as e:
         print(f"❌ 전체 프로세스 에러: {e}")
