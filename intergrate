@@ -2,6 +2,8 @@ import os
 import re
 from github import Github, Auth
 from notion_client import Client
+import notion_client
+print(f"📦 현재 설치된 라이브러리 버전: {notion_client.__version__}")
 
 # 1. 환경 변수 설정
 GH_TOKEN = os.environ.get("GH_TOKEN")
