@@ -1,18 +1,17 @@
 import os
 import re
 import requests
-from github import Auth
-from github import Github
+from github import Github, Auth  # Auth 추가
 from notion_client import Client
 
 # 1. 시크릿 환경 변수 가져오기
 GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
-NOTION_DB_ID = os.environ.get("NOTION_DB_ID") # 깃 메세지 보내는용 데베
-NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID") # 상태 수정 저장용 데베 (추가됨)
+NOTION_DB_ID = os.environ.get("NOTION_DB_ID")             # 깃 메세지 기록용
+NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID") # 상태 수정용
 REPO_NAME = os.environ.get("REPO_NAME")
 
-# 2. 상태 매핑 
+# 2. 상태 매핑
 STATUS_MAP = {
     "#idea": "아이디어",
     "#coding": "코딩중",
@@ -28,23 +27,13 @@ headers = {
     "Notion-Version": "2022-06-28"
 }
 
-def sync_to_notion():
-    """깃허브 커밋 기록을 노션에 남기고, 상태 변경 함수를 호출하는 메인 로직"""
-    try:
-        # 이렇게 두 줄로 바꿔주세요!
-        auth = Auth.Token(GH_TOKEN)
-        g = Github(auth=auth)
-        
-        notion = Client(auth=NOTION_TOKEN)
-
 def get_page_id_by_task_id(task_id_number):
-    # ⚠️ 여기를 NOTION_STATUS_DB_ID 로 변경했습니다. (상태 업데이트할 페이지를 찾는 용도)
+    """상태 수정용 DB에서 태스크 찾기"""
     url = f"https://api.notion.com/v1/databases/{NOTION_STATUS_DB_ID}/query"
     
-    # 노션 고유 ID(Unique ID) 속성 전용 필터 구조입니다.
     payload = {
         "filter": {
-            "property": "ID", # ⚠️ 노션 DB의 ID 컬럼 이름이 'ID'인지 다시 확인!
+            "property": "ID", 
             "unique_id": {
                 "equals": int(task_id_number)
             }
@@ -58,19 +47,18 @@ def get_page_id_by_task_id(task_id_number):
         if results:
             return results[0]["id"]
         else:
-            # 결과가 없을 때 API가 보낸 응답을 확인하기 위한 디버그 코드
-            print(f"🧐 결과 없음: 필터는 성공했으나 '{task_id_number}'와 일치하는 데이터가 DB에 없습니다.")
+            print(f"🧐 결과 없음: '{task_id_number}'와 일치하는 데이터가 DB에 없습니다.")
     else:
         print(f"❌ API 오류: {response.status_code}, {response.text}")
         
     return None
 
 def update_task_status(page_id, new_status):
-    """찾아낸 페이지의 '작업 상태'를 바꾸는 함수"""
+    """찾아낸 페이지의 '작업 상태'를 변경"""
     url = f"https://api.notion.com/v1/pages/{page_id}"
     payload = {
         "properties": {
-            "작업 상태": { # ⚠️ 노션 속성 이름이 '작업 상태'가 맞는지 확인하세요!
+            "작업 상태": { 
                 "status": {"name": new_status}
             }
         }
@@ -79,49 +67,48 @@ def update_task_status(page_id, new_status):
     return response.status_code == 200
 
 def process_commit_message(commit_message):
-    """커밋 메시지를 읽고 상태 변경을 실행하는 함수"""
+    """커밋 메시지 분석 및 상태 업데이트 실행"""
     if not commit_message: return
     print(f"🔍 커밋 메시지 분석 중: {commit_message}")
     
-    # ⚠️ 여기서 SCH-번호 를 찾습니다!
     task_match = re.search(r"SCH-(\d+)", commit_message.upper())
     if not task_match: 
-        print("ℹ️ 커밋 메시지에서 'SCH-번호'를 찾지 못해 상태는 그대로 둡니다.")
+        print("ℹ️ 'SCH-번호'를 찾지 못해 상태를 유지합니다.")
         return
         
     task_number = task_match.group(1)
     msg_lower = commit_message.lower()
-    
-    # 태그(#idea 등)가 있는지 확인
     new_status = next((status for tag, status in STATUS_MAP.items() if tag in msg_lower), None)
 
     if new_status:
         page_id = get_page_id_by_task_id(task_number)
         if page_id:
             if update_task_status(page_id, new_status):
-                print(f"✅ SCH-{task_number} 태스크의 상태가 '{new_status}'(으)로 성공적으로 변경되었습니다!")
+                print(f"✅ SCH-{task_number} 상태가 '{new_status}'로 변경되었습니다!")
         else:
-            print(f"❌ 노션에서 고유 ID가 '{task_number}'인 페이지를 찾을 수 없습니다.")
+            print(f"❌ ID '{task_number}'인 페이지를 찾을 수 없습니다.")
     else:
-        print("ℹ️ 커밋 메시지에서 상태 변경 태그(#idea 등)를 찾지 못했습니다.")
+        print("ℹ️ 상태 변경 태그(#idea 등)가 없습니다.")
 
 def sync_to_notion():
-    """깃허브 커밋 기록을 노션에 남기고, 상태 변경 함수를 호출하는 메인 로직"""
+    """메인 로직: 기록 DB에 저장 후 상태 업데이트 시도"""
     try:
-        g = Github(GH_TOKEN)
+        # 최신 인증 방식 적용 (DeprecationWarning 해결)
+        auth = Auth.Token(GH_TOKEN)
+        g = Github(auth=auth)
+        
         notion = Client(auth=NOTION_TOKEN)
         repo = g.get_repo(REPO_NAME)
 
-        # 가장 최근 커밋 정보 가져오기
         commit = repo.get_commits()[0]
         msg = commit.commit.message
         author = commit.commit.author.name
         url = commit.html_url
         date = commit.commit.author.date.isoformat() 
 
-        # 1단계: 노션에 커밋 기록 새 줄로 추가하기
+        # 1단계: 기록용 DB에 저장
         notion.pages.create(
-            parent={"database_id": NOTION_DB_ID}, # ⚠️ 여기는 기존대로 깃 메세지용 DB를 사용합니다.
+            parent={"database_id": NOTION_DB_ID},
             properties={
                 "Name": {"title": [{"text": {"content": msg}}]},
                 "Author": {"rich_text": [{"text": {"content": author}}]},
@@ -129,9 +116,9 @@ def sync_to_notion():
                 "Date": {"date": {"start": date}} 
             }
         )
-        print(f"🚀 성공! '{msg}' 커밋이 노션에 기록되었습니다.")
+        print(f"🚀 성공! '{msg}' 커밋이 노션 기록 DB에 저장되었습니다.")
         
-        # 2단계: 방금 가져온 메시지(msg)로 상태 변경 시도하기
+        # 2단계: 상태 업데이트 시도
         process_commit_message(msg)
         
     except Exception as e:
