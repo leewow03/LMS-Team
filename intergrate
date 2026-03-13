@@ -1,22 +1,38 @@
 import os
-from github import Github
+from github import Github, Auth  # Auth 추가
 from notion_client import Client
 
-# 1. 깃허브 금고(Secrets)
+# 1. 환경 변수 설정
 GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 NOTION_DB_ID = os.environ.get("NOTION_DB_ID")
 REPO_NAME = os.environ.get("REPO_NAME")
 
+# [추가] 에러 방지를 위해 메시지를 처리하는 함수를 미리 정의해야 합니다.
+def process_commit_message(msg):
+    """
+    커밋 메시지에 따라 상태를 변경하는 로직을 여기에 작성하세요.
+    지금은 간단히 출력만 하도록 설정했습니다.
+    """
+    print(f"⚙️ 커밋 메시지 분석 중: {msg}")
+    # 여기에 조건문(if 'fix' in msg 등)을 추가할 수 있습니다.
+
 def sync_to_notion():
     try:
-        # 2. 서비스 연결
-        g = Github(GH_TOKEN)
+        # 2. 서비스 연결 (최신 인증 방식 적용)
+        auth = Auth.Token(GH_TOKEN)
+        g = Github(auth=auth)
+        
         notion = Client(auth=NOTION_TOKEN)
         repo = g.get_repo(REPO_NAME)
 
         # 가장 최근 커밋 정보 가져오기
-        commit = repo.get_commits()[0]
+        commits = repo.get_commits()
+        if commits.totalCount == 0:
+            print("⚠️ 커밋 기록이 없습니다.")
+            return
+
+        commit = commits[0]
         msg = commit.commit.message
         author = commit.commit.author.name
         url = commit.html_url
@@ -34,7 +50,7 @@ def sync_to_notion():
         )
         print(f"🚀 성공! '{msg}' 커밋이 노션에 기록되었습니다.")
         
-        # 2단계: 방금 가져온 메시지(msg)로 상태 변경 시도하기
+        # 2단계: 가져온 메시지(msg)로 상태 변경 시도
         process_commit_message(msg)
         
     except Exception as e:
