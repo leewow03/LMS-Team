@@ -2,8 +2,7 @@ import os
 import re
 from github import Github, Auth
 from notion_client import Client
-import notion_client
-print(f"📦 현재 설치된 라이브러리 버전: {notion_client.__version__}")
+
 
 # 1. 환경 변수 설정
 GH_TOKEN = os.environ.get("GH_TOKEN")
@@ -21,12 +20,8 @@ STATUS_MAP = {
     "#done": "완료"
 }
 
-notion = Client(auth=NOTION_TOKEN)
-
 def update_task_status(msg):
-    """
-    상태 관리 DB에서 'ID'가 일치하는 항목을 찾아 상태를 업데이트합니다.
-    """
+    # 1. 메시지에서 상태 키워드 및 ID 추출
     found_status = next((status for key, status in STATUS_MAP.items() if key in msg), None)
     match = re.search(r'STA-\d+', msg)
     
@@ -34,26 +29,27 @@ def update_task_status(msg):
         return
 
     task_id = match.group()
-    print(f"⚙️ [상태 DB] '{task_id}' 항목을 '{found_status}'(으)로 업데이트 시도...")
+    print(f"⚙️ [상태 DB] '{task_id}' 항목 업데이트 시도...")
     
     try:
-        # ⚠️ 이 부분을 아래와 같이 수정합니다.
-        response = notion.databases.query(
+        # notion.databases.query가 없다고 나올 때를 대비한 안전한 호출
+        # 만약 이래도 에러가 나면 라이브러리 자체가 잘못 설치된 것입니다.
+        db_query_func = getattr(notion.databases, "query", None)
+        
+        if db_query_func is None:
+            print("❌ 에러: 사용 중인 notion-client 패키지에 query 기능이 없습니다.")
+            return
+
+        query = db_query_func(
             database_id=NOTION_STATUS_DB_ID,
             filter={
                 "property": "ID",
-                "rich_text": {
-                    "equals": task_id
-                }
+                "rich_text": {"equals": task_id}
             }
         )
         
-        # 'results' 키가 있는지 안전하게 확인
-        results = response.get("results", [])
-        
-        if results:
-            page_id = results[0]['id']
-            
+        if query.get('results'):
+            page_id = query['results'][0]['id']
             notion.pages.update(
                 page_id=page_id,
                 properties={
@@ -65,8 +61,7 @@ def update_task_status(msg):
             print(f"⚠️ 일치하는 '{task_id}' 항목을 찾을 수 없습니다.")
             
     except Exception as e:
-        # 에러가 계속된다면 e를 출력하여 상세 내용을 확인합니다.
-        print(f"⚠️ 상태 DB 업데이트 오류: {e}")
+        print(f"⚠️ 상태 DB 업데이트 오류 상세: {e}")
 
 def commit_to_notion(msg, author, url, date): 
     """
