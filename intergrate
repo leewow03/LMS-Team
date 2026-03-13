@@ -1,5 +1,5 @@
 import os
-from github import Github, Auth  # Auth 추가
+from github import Github, Auth  
 from notion_client import Client
 
 # 1. 환경 변수 설정
