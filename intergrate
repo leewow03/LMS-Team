@@ -20,6 +20,9 @@ STATUS_MAP = {
     "#done": "완료"
 }
 
+notion = Client(auth=NOTION_TOKEN)
+
+
 def update_task_status(msg):
     """
     상태 관리 DB(NOTION_STATUS_DB_ID)에서 'ID'가 일치하는 항목을 찾아 상태를 업데이트합니다.
