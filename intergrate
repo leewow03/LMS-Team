@@ -30,7 +30,7 @@ def update_task_status(msg):
     match = re.search(r'STA-\d+', msg)
     
     if not found_status or not match:
-        print("ℹ️ 업데이트 대상 없음")
+        print("ℹ️ 업데이트 대상없음")
         return
 
     task_id = match.group()
