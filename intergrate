@@ -1,125 +1,37 @@
 import os
-import re
-import requests
-from github import Github, Auth  # Auth 추가
+from github import Github
 from notion_client import Client
 
-# 1. 시크릿 환경 변수 가져오기
+# 1. 깃허브 금고(Secrets)에서 값들을 가져옵니다.
+# 괄호 안의 이름은 Secrets에 등록한 이름과 똑같아야 합니다.
 GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
-NOTION_DB_ID = os.environ.get("NOTION_DB_ID")             # 깃 메세지 기록용
-NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID") # 상태 수정용
+NOTION_DB_ID = os.environ.get("NOTION_DB_ID")
 REPO_NAME = os.environ.get("REPO_NAME")
 
-# 2. 상태 매핑
-STATUS_MAP = {
-    "#idea": "아이디어",
-    "#coding": "코딩중",
-    "#review": "검토중",
-    "#debug": "디버깅중",
-    "#done": "완료"
-}
-
-# 상태 변경을 위한 노션 API 헤더
-headers = {
-    "Authorization": f"Bearer {NOTION_TOKEN}",
-    "Content-Type": "application/json",
-    "Notion-Version": "2022-06-28"
-}
-
-def get_page_id_by_task_id(task_id_number):
-    """상태 수정용 DB에서 태스크 찾기"""
-    url = f"https://api.notion.com/v1/databases/{NOTION_STATUS_DB_ID}/query"
-    
-    payload = {
-        "filter": {
-            "property": "ID", 
-            "unique_id": {
-                "equals": int(task_id_number)
-            }
-        }
-    }
-    
-    response = requests.post(url, headers=headers, json=payload)
-    
-    if response.status_code == 200:
-        results = response.json().get("results")
-        if results:
-            return results[0]["id"]
-        else:
-            print(f"🧐 결과 없음: '{task_id_number}'와 일치하는 데이터가 DB에 없습니다.")
-    else:
-        print(f"❌ API 오류: {response.status_code}, {response.text}")
-        
-    return None
-
-def update_task_status(page_id, new_status):
-    """찾아낸 페이지의 '작업 상태'를 변경"""
-    url = f"https://api.notion.com/v1/pages/{page_id}"
-    payload = {
-        "properties": {
-            "작업 상태": { 
-                "status": {"name": new_status}
-            }
-        }
-    }
-    response = requests.patch(url, headers=headers, json=payload)
-    return response.status_code == 200
-
-def process_commit_message(commit_message):
-    """커밋 메시지 분석 및 상태 업데이트 실행"""
-    if not commit_message: return
-    print(f"🔍 커밋 메시지 분석 중: {commit_message}")
-    
-    task_match = re.search(r"SCH-(\d+)", commit_message.upper())
-    if not task_match: 
-        print("ℹ️ 'SCH-번호'를 찾지 못해 상태를 유지합니다.")
-        return
-        
-    task_number = task_match.group(1)
-    msg_lower = commit_message.lower()
-    new_status = next((status for tag, status in STATUS_MAP.items() if tag in msg_lower), None)
-
-    if new_status:
-        page_id = get_page_id_by_task_id(task_number)
-        if page_id:
-            if update_task_status(page_id, new_status):
-                print(f"✅ SCH-{task_number} 상태가 '{new_status}'로 변경되었습니다!")
-        else:
-            print(f"❌ ID '{task_number}'인 페이지를 찾을 수 없습니다.")
-    else:
-        print("ℹ️ 상태 변경 태그(#idea 등)가 없습니다.")
-
 def sync_to_notion():
-    """메인 로직: 기록 DB에 저장 후 상태 업데이트 시도"""
     try:
-        # 최신 인증 방식 적용 (DeprecationWarning 해결)
-        auth = Auth.Token(GH_TOKEN)
-        g = Github(auth=auth)
-        
-        notion = Client(auth=NOTION_TOKEN)
+        # 2. 서비스 연결
+        g = Github(GH_TOKEN)
+        notion = Client(auth=NO_TOKEN)
         repo = g.get_repo(REPO_NAME)
 
+        # 3. 가장 최근 커밋 정보 추출
         commit = repo.get_commits()[0]
         msg = commit.commit.message
         author = commit.commit.author.name
         url = commit.html_url
-        date = commit.commit.author.date.isoformat() 
 
-        # 1단계: 기록용 DB에 저장
+        # 4. 노션 데이터베이스에 데이터 추가
         notion.pages.create(
-            parent={"database_id": NOTION_DB_ID},
+            parent={"database_id": DB_ID},
             properties={
                 "Name": {"title": [{"text": {"content": msg}}]},
                 "Author": {"rich_text": [{"text": {"content": author}}]},
-                "URL": {"url": url},
-                "Date": {"date": {"start": date}} 
+                "URL": {"url": url}
             }
         )
-        print(f"🚀 성공! '{msg}' 커밋이 노션 기록 DB에 저장되었습니다.")
-        
-        # 2단계: 상태 업데이트 시도
-        process_commit_message(msg)
+        print(f"🚀 성공! '{msg}' 커밋이 노션에 기록되었습니다.")
         
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
