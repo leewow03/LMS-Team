@@ -8,7 +8,7 @@ from notion_client import Client
 GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 NOTION_DB_ID = os.environ.get("NOTION_DB_ID")           # 커밋로그저장용 DB
-NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID")  # 작업 상태 관리용DB
+NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID")  # 작업 상태 관리용 DB
 REPO_NAME = os.environ.get("REPO_NAME")
 
 # 상태 매핑 (커밋 키워드: 노션의 상태 속성값)
