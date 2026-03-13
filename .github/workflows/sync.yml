@@ -16,6 +16,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade notion-client PyGithub
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir --upgrade notion-client PyGithub
           
       - name: Install libraries
         run: pip install PyGithub notion-client
