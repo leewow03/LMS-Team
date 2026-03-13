@@ -35,35 +35,35 @@ def update_task_status(msg):
     task_id = match.group()
     print(f"⚙️ [상태 DB] '{task_id}' 항목을 '{found_status}'(으)로 변경 시도...")
     
-   try:
-    # 2. 쿼리 방식 확인 (공식 문서 기준)
-    query = notion.databases.query(
-        **{ # 가독성을 위해 딕셔너리 언패킹 방식을 사용하기도 합니다.
-            "database_id": NOTION_STATUS_DB_ID,
-            "filter": {
-                "property": "ID",
-                "rich_text": {"equals": task_id}
-            }
-        }
-    )
-    
-    if query['results']:
-        page_id = query['results'][0]['id']
-        # 3. 상태 업데이트
-        notion.pages.update(
-            page_id=page_id,
-            properties={
-                "Status": {
-                    "status": {"name": found_status}
+    # 💡 여기서 들여쓰기를 정확히 맞춰야 합니다 (보통 스페이스 4칸)
+    try:
+        notion = Client(auth=NOTION_TOKEN) # notion 클라이언트가 여기서 선언되어야 합니다
+        query = notion.databases.query(
+            **{
+                "database_id": NOTION_STATUS_DB_ID,
+                "filter": {
+                    "property": "ID",
+                    "rich_text": {"equals": task_id}
                 }
             }
         )
-        print(f"✅ [상태 DB] 업데이트 완료!")
-    else:
-        print(f"⚠️ 해당 ID({task_id})를 가진 페이지를 찾을 수 없습니다.")
+        
+        if query['results']:
+            page_id = query['results'][0]['id']
+            notion.pages.update(
+                page_id=page_id,
+                properties={
+                    "Status": {
+                        "status": {"name": found_status}
+                    }
+                }
+            )
+            print(f"✅ [상태 DB] 업데이트 완료!")
+        else:
+            print(f"⚠️ 해당 ID({task_id})를 가진 페이지를 찾을 수 없습니다.")
 
-except Exception as e:
-    print(f"⚠️ 상태 DB 업데이트 오류: {e}")
+    except Exception as e:
+        print(f"⚠️ 상태 DB 업데이트 오류: {e}")
 
 def commit_to_notion(msg, author, url, date): 
     """
