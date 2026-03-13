@@ -27,25 +27,30 @@ headers = {
 }
 
 def get_page_id_by_task_id(task_id_number):
-    """
-    task_id_number: '5' 같은 숫자 형태의 문자열이 들어옵니다.
-    """
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
     
-    # 노션 API는 고유 ID를 찾을 때 접두어(SCH-)를 떼고 '숫자'로만 검색해야 합니다.
+    # 노션 고유 ID(Unique ID) 속성 전용 필터 구조입니다.
     payload = {
-    "filter": {
-        "property": "ID",
-        "number": {
-            "equals": int(task_id_number)
+        "filter": {
+            "property": "ID", # ⚠️ 노션 DB의 ID 컬럼 이름이 'ID'인지 다시 확인!
+            "unique_id": {
+                "equals": int(task_id_number)
+            }
         }
     }
-    }
+    
     response = requests.post(url, headers=headers, json=payload)
+    
     if response.status_code == 200:
         results = response.json().get("results")
         if results:
             return results[0]["id"]
+        else:
+            # 결과가 없을 때 API가 보낸 응답을 확인하기 위한 디버그 코드
+            print(f"🧐 결과 없음: 필터는 성공했으나 '{task_id_number}'와 일치하는 데이터가 DB에 없습니다.")
+    else:
+        print(f"❌ API 오류: {response.status_code}, {response.text}")
+        
     return None
 
 def update_task_status(page_id, new_status):
