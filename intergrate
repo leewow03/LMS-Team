@@ -1,6 +1,7 @@
 import os
 import re
 import requests
+from github import Auth
 from github import Github
 from notion_client import Client
 
@@ -26,6 +27,15 @@ headers = {
     "Content-Type": "application/json",
     "Notion-Version": "2022-06-28"
 }
+
+def sync_to_notion():
+    """깃허브 커밋 기록을 노션에 남기고, 상태 변경 함수를 호출하는 메인 로직"""
+    try:
+        # 이렇게 두 줄로 바꿔주세요!
+        auth = Auth.Token(GH_TOKEN)
+        g = Github(auth=auth)
+        
+        notion = Client(auth=NOTION_TOKEN)
 
 def get_page_id_by_task_id(task_id_number):
     # ⚠️ 여기를 NOTION_STATUS_DB_ID 로 변경했습니다. (상태 업데이트할 페이지를 찾는 용도)
