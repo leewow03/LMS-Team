@@ -61,15 +61,24 @@ def update_task_status(msg):
         
         if target_page_id:
             update_url = f"https://api.notion.com/v1/pages/{target_page_id}"
-            res_up = requests.patch(update_url, headers=HEADERS, json={
-                "properties": {"상태": {"select": {"name": found_status}}}
-            })
+            
+            # [수정] 'select' 대신 'status'를 사용합니다.
+            update_payload = {
+                "properties": {
+                    "상태": {
+                        "status": {
+                            "name": found_status
+                        }
+                    }
+                }
+            }
+            
+            res_up = requests.patch(update_url, headers=HEADERS, json=update_payload)
             if res_up.status_code == 200:
                 print(f"✅ [상태 DB] {task_id} -> {found_status} 완료!")
             else:
+                # 에러가 또 난다면 어떤 타입인지 출력해 확인합니다.
                 print(f"❌ 업데이트 실패: {res_up.text}")
-        else:
-            print(f"⚠️ {task_id}와 일치하는 고유 ID를 찾지 못했습니다.")
             
     except Exception as e:
         print(f"⚠️ 에러 발생: {e}")
