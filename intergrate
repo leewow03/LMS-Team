@@ -1,81 +1,43 @@
-import os
-from github import Github, Auth  
+import re
 from notion_client import Client
 
-# 1. 환경 변수 설정 (ID 추가)
-GH_TOKEN = os.environ.get("GH_TOKEN")
-NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
-NOTION_DB_ID = os.environ.get("NOTION_DB_ID")
-NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID") # 상태 관리 DB ID
-REPO_NAME = os.environ.get("REPO_NAME")
-
 def process_commit_message(msg):
-    """
-    커밋 메시지에서 'STA-123' 같은 형식을 찾아 상태 DB를 업데이트합니다.
-    """
-    if "STA-" in msg:
-        try:
-            # 예: "STA-123" 추출
-            import re
-            match = re.search(r'STA-\d+', msg)
-            if match:
-                task_id = match.group()
-                print(f"⚙️ '{task_id}' 항목에 대한 상태 업데이트 시도 중...")
-                
-                # 1. 먼저 해당 ID를 가진 페이지를 찾기 (Query DB)
-                notion = Client(auth=NOTION_TOKEN)
-                query = notion.databases.query(
-                    database_id=NOTION_STATUS_DB_ID,
-                    filter={"property": "ID", "rich_text": {"equals": task_id}}
-                )
-                
-                if query['results']:
-                    page_id = query['results'][0]['id']
-                    # 2. 상태를 'Done'으로 변경 (사용 중인 DB 속성 이름에 맞춰 'Status' 부분 수정 필요)
-                    notion.pages.update(
-                        page_id=page_id,
-                        properties={"Status": {"status": {"name": "Done"}}}
-                    )
-                    print(f"✅ 상태 DB의 {task_id}가 'Done'으로 업데이트되었습니다.")
-        except Exception as e:
-            print(f"⚠️ 상태 DB 업데이트 중 에러 발생: {e}")
+    # 1. 메시지에서 패턴 찾기 (STA- 또는 SCH- 모두 대응 가능하도록 수정)
+    match = re.search(r'(STA|SCH)-\d+', msg)
+    
+    if not match:
+        print(f"🔍 디버그: 커밋 메시지 '{msg}'에서 ID 패턴을 찾지 못했습니다.")
+        return
 
-def sync_to_notion():
+    task_id = match.group()
+    print(f"⚙️ 디버그: 추출된 ID는 '{task_id}' 입니다.")
+    
     try:
-        # 서비스 연결
-        auth = Auth.Token(GH_TOKEN)
-        g = Github(auth=auth)
         notion = Client(auth=NOTION_TOKEN)
-        repo = g.get_repo(REPO_NAME)
-
-        commits = repo.get_commits()
-        if commits.totalCount == 0:
-            print("⚠️ 커밋 기록이 없습니다.")
-            return
-
-        commit = commits[0]
-        msg = commit.commit.message
-        author = commit.commit.author.name
-        url = commit.html_url
-        date = commit.commit.author.date.isoformat() 
-
-        # 1단계: 노션에 커밋 기록 추가
-        notion.pages.create(
-            parent={"database_id": NOTION_DB_ID},
-            properties={
-                "Name": {"title": [{"text": {"content": msg}}]},
-                "Author": {"rich_text": [{"text": {"content": author}}]},
-                "URL": {"url": url},
-                "Date": {"date": {"start": date}} 
-            }
+        
+        # 2. 검색 쿼리 출력
+        print(f"🔍 디버그: 데이터베이스({NOTION_STATUS_DB_ID})에서 '{task_id}'를 조회합니다.")
+        
+        query = notion.databases.query(
+            database_id=NOTION_STATUS_DB_ID,
+            filter={"property": "ID", "rich_text": {"equals": task_id}}
         )
-        print(f"🚀 성공! '{msg}' 커밋이 노션에 기록되었습니다.")
         
-        # 2단계: 커밋 메시지를 분석하여 상태 DB 업데이트
-        process_commit_message(msg)
+        # 3. 검색 결과 확인
+        print(f"🔍 디버그: 검색 결과 개수 = {len(query['results'])}")
         
+        if len(query['results']) > 0:
+            page_id = query['results'][0]['id']
+            print(f"✅ 디버그: 페이지 발견! (Page ID: {page_id})")
+            
+            # 상태 업데이트
+            notion.pages.update(
+                page_id=page_id,
+                properties={"Status": {"status": {"name": "Done"}}}
+            )
+            print(f"🎉 성공! {task_id} 상태가 'Done'으로 변경되었습니다.")
+        else:
+            print(f"❌ 디버그: ID '{task_id}'와 일치하는 페이지가 없습니다. 속성 이름을 확인하세요.")
+            
     except Exception as e:
-        print(f"❌ 에러 발생: {e}")
-
-if __name__ == "__main__":
-    sync_to_notion()
+        print(f"❌ 디버그: 에러 발생 -> {e}")
