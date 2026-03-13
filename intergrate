@@ -15,8 +15,14 @@ def sync_to_notion():
         notion = Client(auth=NOTION_TOKEN)
         repo = g.get_repo(REPO_NAME)
 
-      
-        # 3. 노션 데이터베이스에 데이터 추가
+        # 가장 최근 커밋 정보 가져오기
+        commit = repo.get_commits()[0]
+        msg = commit.commit.message
+        author = commit.commit.author.name
+        url = commit.html_url
+        date = commit.commit.author.date.isoformat() 
+
+        # 1단계: 노션에 커밋 기록 새 줄로 추가하기
         notion.pages.create(
             parent={"database_id": NOTION_DB_ID},
             properties={
@@ -26,7 +32,10 @@ def sync_to_notion():
                 "Date": {"date": {"start": date}} 
             }
         )
-        print(f"🚀 성공! 커밋이 노션에 기록되었습니다.")
+        print(f"🚀 성공! '{msg}' 커밋이 노션에 기록되었습니다.")
+        
+        # 2단계: 방금 가져온 메시지(msg)로 상태 변경 시도하기
+        process_commit_message(msg)
         
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
