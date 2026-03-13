@@ -23,3 +23,9 @@ jobs:
           NOTION_STATUS_DB_ID:  ${{ secrets.NOTION_STATUS_DB_ID }}
           REPO_NAME: ${{ secrets.REPO_NAME }}
         run: python intergrate 
+
+- name: Install dependencies
+  run: |
+    python -m pip install --upgrade pip
+    pip install notion-client --upgrade  # 이 줄을 추가하거나 수정
+    pip install PyGithub
