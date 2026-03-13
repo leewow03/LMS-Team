@@ -2,31 +2,52 @@ import os
 from github import Github, Auth  
 from notion_client import Client
 
-# 1. 환경 변수 설정
+# 1. 환경 변수 설정 (ID 추가)
 GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 NOTION_DB_ID = os.environ.get("NOTION_DB_ID")
+NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID") # 상태 관리 DB ID
 REPO_NAME = os.environ.get("REPO_NAME")
 
-# [추가] 에러 방지를 위해 메시지를 처리하는 함수를 미리 정의해야 합니다.
 def process_commit_message(msg):
     """
-    커밋 메시지에 따라 상태를 변경하는 로직을 여기에 작성하세요.
-    지금은 간단히 출력만 하도록 설정했습니다.
+    커밋 메시지에서 'STA-123' 같은 형식을 찾아 상태 DB를 업데이트합니다.
     """
-    print(f"⚙️ 커밋 메시지 분석 중: {msg}")
-    # 여기에 조건문(if 'fix' in msg 등)을 추가할 수 있습니다.
+    if "STA-" in msg:
+        try:
+            # 예: "STA-123" 추출
+            import re
+            match = re.search(r'STA-\d+', msg)
+            if match:
+                task_id = match.group()
+                print(f"⚙️ '{task_id}' 항목에 대한 상태 업데이트 시도 중...")
+                
+                # 1. 먼저 해당 ID를 가진 페이지를 찾기 (Query DB)
+                notion = Client(auth=NOTION_TOKEN)
+                query = notion.databases.query(
+                    database_id=NOTION_STATUS_DB_ID,
+                    filter={"property": "ID", "rich_text": {"equals": task_id}}
+                )
+                
+                if query['results']:
+                    page_id = query['results'][0]['id']
+                    # 2. 상태를 'Done'으로 변경 (사용 중인 DB 속성 이름에 맞춰 'Status' 부분 수정 필요)
+                    notion.pages.update(
+                        page_id=page_id,
+                        properties={"Status": {"status": {"name": "Done"}}}
+                    )
+                    print(f"✅ 상태 DB의 {task_id}가 'Done'으로 업데이트되었습니다.")
+        except Exception as e:
+            print(f"⚠️ 상태 DB 업데이트 중 에러 발생: {e}")
 
 def sync_to_notion():
     try:
-        # 2. 서비스 연결 (최신 인증 방식 적용)
+        # 서비스 연결
         auth = Auth.Token(GH_TOKEN)
         g = Github(auth=auth)
-        
         notion = Client(auth=NOTION_TOKEN)
         repo = g.get_repo(REPO_NAME)
 
-        # 가장 최근 커밋 정보 가져오기
         commits = repo.get_commits()
         if commits.totalCount == 0:
             print("⚠️ 커밋 기록이 없습니다.")
@@ -38,7 +59,7 @@ def sync_to_notion():
         url = commit.html_url
         date = commit.commit.author.date.isoformat() 
 
-        # 1단계: 노션에 커밋 기록 새 줄로 추가하기
+        # 1단계: 노션에 커밋 기록 추가
         notion.pages.create(
             parent={"database_id": NOTION_DB_ID},
             properties={
@@ -50,7 +71,7 @@ def sync_to_notion():
         )
         print(f"🚀 성공! '{msg}' 커밋이 노션에 기록되었습니다.")
         
-        # 2단계: 가져온 메시지(msg)로 상태 변경 시도
+        # 2단계: 커밋 메시지를 분석하여 상태 DB 업데이트
         process_commit_message(msg)
         
     except Exception as e:
