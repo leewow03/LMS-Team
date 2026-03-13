@@ -7,7 +7,7 @@ from notion_client import Client
 GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 # 데이터베이스 ID 분리
-NOTION_LOG_DB_ID = os.environ.get("NOTION_LOG_DB_ID")         # 커밋 로그 저장용 DB
+NOTION_DB_ID = os.environ.get("NOTION_DB_ID")         # 커밋 저장용 DB
 NOTION_STATUS_DB_ID = os.environ.get("NOTION_STATUS_DB_ID")   # 작업 상태 관리용 DB
 REPO_NAME = os.environ.get("REPO_NAME")
 
@@ -54,14 +54,14 @@ def update_task_status(msg):
     except Exception as e:
         print(f"⚠️ 상태 DB 업데이트 오류: {e}")
 
-def log_commit_to_notion(msg, author, url, date):
+def commit_notion(msg, author, url, date):
     """
-    커밋 로그 DB(NOTION_LOG_DB_ID)에 커밋 내역을 추가합니다.
+    커밋 로그 DB(NOTION_DB_ID)에 커밋 내역을 추가합니다.
     """
     try:
         notion = Client(auth=NOTION_TOKEN)
         notion.pages.create(
-            parent={"database_id": NOTION_LOG_DB_ID},
+            parent={"database_id": NOTION_DB_ID},
             properties={
                 "Name": {"title": [{"text": {"content": msg}}]},
                 "Author": {"rich_text": [{"text": {"content": author}}]},
