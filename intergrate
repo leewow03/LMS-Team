@@ -9,7 +9,7 @@ GH_TOKEN = os.environ.get("GH_TOKEN")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 REPO_NAME = os.environ.get("REPO_NAME")
 
-# DB ID 분리
+# DB ID 분리용
 NOTION_TASK_DB_ID = os.environ.get("NOTION_DB_ID")        # 상태 관리용 (태스크 보드)
 NOTION_COMMIT_DB_ID = os.environ.get("NOTION_COMMIT_DB_ID") # 커밋 기록 전용
 
