@@ -30,48 +30,49 @@ def update_task_status(msg):
     match = re.search(r'STA-\d+', msg)
     
     if not found_status or not match:
-        print("ℹ️ 업데이트 대상없음")
+        print("ℹ️ 업데이트 대상 없음")
         return
 
-    task_id = match.group()
+    task_id = match.group() # 예: "STA-5"
     clean_db_id = NOTION_STATUS_DB_ID.strip().replace("-", "")
     
     try:
         query_url = f"https://api.notion.com/v1/databases/{clean_db_id}/query"
         res = requests.post(query_url, headers=HEADERS, json={})
-        
-        if res.status_code != 200:
-            print(f"❌ DB 조회 실패: {res.text}")
-            return
-
         data = res.json()
         results = data.get('results', [])
-        print(f"📊 현재 DB 항목 수: {len(results)}개")
 
         target_page_id = None
         for page in results:
             props = page.get('properties', {})
-            id_data = props.get('ID', {}).get('rich_text', [])
-            if id_data:
-                actual_id = id_data[0].get('plain_text', '').strip()
-                if actual_id == task_id:
+            
+            # [수정] 고유 ID(unique_id) 유형에서 값 추출
+            # 노션 API에서 고유 ID는 'unique_id' 키 안에 'prefix'와 'number'로 나뉩니다.
+            uid_prop = props.get('ID', {}).get('unique_id', {})
+            if uid_prop:
+                prefix = uid_prop.get('prefix') or ""
+                number = uid_prop.get('number')
+                # 접두어와 숫자를 합쳐서 "STA-5" 형태를 만듭니다.
+                actual_full_id = f"{prefix}-{number}" if prefix else str(number)
+                
+                if actual_full_id == task_id:
                     target_page_id = page['id']
                     break
         
         if target_page_id:
             update_url = f"https://api.notion.com/v1/pages/{target_page_id}"
-            update_payload = {
-                "properties": {
-                    "상태": {"select": {"name": found_status}}
-                }
-            }
-            res_up = requests.patch(update_url, headers=HEADERS, json=update_payload)
+            res_up = requests.patch(update_url, headers=HEADERS, json={
+                "properties": {"상태": {"select": {"name": found_status}}}
+            })
             if res_up.status_code == 200:
                 print(f"✅ [상태 DB] {task_id} -> {found_status} 완료!")
             else:
                 print(f"❌ 업데이트 실패: {res_up.text}")
         else:
-            print(f"⚠️ {task_id}를 DB에서 찾지 못했습니다.")
+            print(f"⚠️ {task_id}와 일치하는 고유 ID를 찾지 못했습니다.")
+            
+    except Exception as e:
+        print(f"⚠️ 에러 발생: {e}")
             
     except Exception as e:
         print(f"⚠️ 에러 발생: {e}")
