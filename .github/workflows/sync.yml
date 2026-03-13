@@ -28,5 +28,4 @@ jobs:
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
           NOTION_STATUS_DB_ID: ${{ secrets.NOTION_STATUS_DB_ID }}
           REPO_NAME: ${{ secrets.REPO_NAME }}
-        # 파일 이름 뒤에 .py가 있다면 붙여주세요. (예: intergrate.py)
-        run: python intergrate.py
+        run: python intergrate
