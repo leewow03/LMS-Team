@@ -12,14 +12,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-      - name: Install dependencies
+     - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --upgrade notion-client PyGithub
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install --no-cache-dir --upgrade notion-client PyGithub
+          pip uninstall notion-client -y  # 혹시 모를 구버전 삭제
+          pip install --no-cache-dir notion-client==2.2.1 PyGithub
           
       - name: Install libraries
         run: pip install PyGithub notion-client
