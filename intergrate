@@ -1,16 +1,24 @@
 import os
 import re
 import requests
-from github import Github
-from notion_client import Client
+from dotenv import load_dotenv
 
-# 1. 시크릿 환경 변수 가져오기
-GH_TOKEN = os.environ.get("GH_TOKEN")
-NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
-NOTION_DB_ID = os.environ.get("NOTION_DB_ID")
-REPO_NAME = os.environ.get("REPO_NAME")
+# 1. 환경 변수 로드
+load_dotenv()
 
-# 2. 상태 매핑 (노션의 상태 속성값과 띄어쓰기까지 똑같아야 합니다)
+NOTION_TOKEN = os.getenv("NOTION_TOKEN")
+DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
+# 깃허브 액션으로부터 커밋 메시지 수신
+COMMIT_MESSAGE = os.getenv("COMMIT_MESSAGE", "[MBC-1] 테스트 커밋 #doing")
+
+# 2. 노션 API 헤더 설정
+headers = {
+    "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Content-Type": "application/json",
+    "Notion-Version": "2022-06-28"
+}
+
+# 3. 상태 매핑 (노션의 '상태' 컬럼 옵션명과 똑같이 맞추세요)
 STATUS_MAP = {
     "#idea": "아이디어",
     "#coding": "코딩중",
@@ -19,111 +27,90 @@ STATUS_MAP = {
     "#done": "완료"
 }
 
-# 상태 변경을 위한 노션 API 헤더
-headers = {
-    "Authorization": f"Bearer {NOTION_TOKEN}",
-    "Content-Type": "application/json",
-    "Notion-Version": "2022-06-28"
-}
 
 def get_page_id_by_task_id(task_id_number):
-    url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
-    
-    # 노션 고유 ID(Unique ID) 속성 전용 필터 구조입니다.
+    """MBC-123에서 숫자 123만 받아 노션 페이지 ID를 찾는 함수"""
+    url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+
+    # 노션의 'ID' 속성(Unique ID)을 이용해 필터링
     payload = {
         "filter": {
-            "property": "ID", # ⚠️ 노션 DB의 ID 컬럼 이름이 'ID'인지 다시 확인!
+            "property": "ID",  # ⚠️ 노션 표의 컬럼 이름이 'ID'여야 합니다.
             "unique_id": {
                 "equals": int(task_id_number)
             }
         }
     }
-    
+
     response = requests.post(url, headers=headers, json=payload)
-    
-    if response.status_code == 200:
-        results = response.json().get("results")
-        if results:
-            return results[0]["id"]
-        else:
-            # 결과가 없을 때 API가 보낸 응답을 확인하기 위한 디버그 코드
-            print(f"🧐 결과 없음: 필터는 성공했으나 '{task_id_number}'와 일치하는 데이터가 DB에 없습니다.")
-    else:
-        print(f"❌ API 오류: {response.status_code}, {response.text}")
-        
+
+    # 에러 발생 시 로그 출력 (디버깅용)
+    if response.status_code != 200:
+        print(f"❌ 노션 API 에러: {response.text}")
+        return None
+
+    results = response.json().get("results")
+    if results:
+        return results[0]["id"]
     return None
 
+
 def update_task_status(page_id, new_status):
-    """찾아낸 페이지의 '작업 상태'를 바꾸는 함수"""
+    """찾은 노션 페이지의 상태를 변경하는 함수"""
     url = f"https://api.notion.com/v1/pages/{page_id}"
+
     payload = {
         "properties": {
-            "작업 상태": { # ⚠️ 노션 속성 이름이 '작업 상태'가 맞는지 확인하세요!
-                "status": {"name": new_status}
+            "작업 상태": {  # ⚠️ 노션 표의 컬럼 이름이 '작업 상태'여야 합니다.
+                "status": {
+                    "name": new_status
+                }
             }
         }
     }
+
     response = requests.patch(url, headers=headers, json=payload)
     return response.status_code == 200
 
-def process_commit_message(commit_message):
-    """커밋 메시지를 읽고 상태 변경을 실행하는 함수"""
-    if not commit_message: return
-    print(f"🔍 커밋 메시지 분석 중: {commit_message}")
-    
-    # ⚠️ 여기서 SCH-번호 를 찾습니다!
-    task_match = re.search(r"SCH-(\d+)", commit_message.upper())
-    if not task_match: 
-        print("ℹ️ 커밋 메시지에서 'SCH-번호'를 찾지 못해 상태는 그대로 둡니다.")
+
+def main():
+    print(f"🔍 분석 중인 커밋 메시지: {COMMIT_MESSAGE}")
+
+    # 🎯 [핵심 수정] TASK 대신 MBC-숫자 형식을 찾습니다.
+    # 대소문자 구분 없이 찾기 위해 .upper()를 적용합니다.
+    task_match = re.search(r"MBC-(\d+)", COMMIT_MESSAGE.upper())
+
+    if not task_match:
+        print("⏭️ MBC ID 형식을 찾을 수 없어 종료합니다. (예: [MBC-1])")
         return
-        
+
+    # 정규표현식에서 첫 번째 괄호 ( ) 에 잡힌 숫자만 가져옵니다.
     task_number = task_match.group(1)
-    msg_lower = commit_message.lower()
-    
-    # 태그(#idea 등)가 있는지 확인
-    new_status = next((status for tag, status in STATUS_MAP.items() if tag in msg_lower), None)
 
-    if new_status:
-        page_id = get_page_id_by_task_id(task_number)
-        if page_id:
-            if update_task_status(page_id, new_status):
-                print(f"✅ SCH-{task_number} 태스크의 상태가 '{new_status}'(으)로 성공적으로 변경되었습니다!")
+    # 상태 키워드 추출 (#done 등)
+    new_status = None
+    msg_lower = COMMIT_MESSAGE.lower()
+    for keyword, status_name in STATUS_MAP.items():
+        if keyword in msg_lower:
+            new_status = status_name
+            break
+
+    if not new_status:
+        print(f"⏭️ MBC-{task_number} 감지됨. 하지만 상태 변경 키워드가 없어 종료합니다.")
+        return
+
+    # 실행
+    print(f"⚙️ MBC-{task_number}를 '{new_status}' 상태로 변경 시도 중...")
+    page_id = get_page_id_by_task_id(task_number)
+
+    if page_id:
+        if update_task_status(page_id, new_status):
+            print(f"✅ 성공: MBC-{task_number}가 [{new_status}]로 업데이트되었습니다.")
         else:
-            print(f"❌ 노션에서 고유 ID가 '{task_number}'인 페이지를 찾을 수 없습니다.")
+            print(f"❌ 실패: 상태 업데이트 API 호출 중 오류가 발생했습니다.")
     else:
-        print("ℹ️ 커밋 메시지에서 상태 변경 태그(#idea 등)를 찾지 못했습니다.")
+        print(f"❌ 실패: 노션 데이터베이스에서 MBC-{task_number}를 찾을 수 없습니다.")
 
-def sync_to_notion():
-    """깃허브 커밋 기록을 노션에 남기고, 상태 변경 함수를 호출하는 메인 로직"""
-    try:
-        g = Github(GH_TOKEN)
-        notion = Client(auth=NOTION_TOKEN)
-        repo = g.get_repo(REPO_NAME)
-
-        # 가장 최근 커밋 정보 가져오기
-        commit = repo.get_commits()[0]
-        msg = commit.commit.message
-        author = commit.commit.author.name
-        url = commit.html_url
-        date = commit.commit.author.date.isoformat() 
-
-        # 1단계: 노션에 커밋 기록 새 줄로 추가하기
-        notion.pages.create(
-            parent={"database_id": NOTION_DB_ID},
-            properties={
-                "Name": {"title": [{"text": {"content": msg}}]},
-                "Author": {"rich_text": [{"text": {"content": author}}]},
-                "URL": {"url": url},
-                "Date": {"date": {"start": date}} 
-            }
-        )
-        print(f"🚀 성공! '{msg}' 커밋이 노션에 기록되었습니다.")
-        
-        # 2단계: 방금 가져온 메시지(msg)로 상태 변경 시도하기
-        process_commit_message(msg)
-        
-    except Exception as e:
-        print(f"❌ 에러 발생: {e}")
 
 if __name__ == "__main__":
-    sync_to_notion()
+    main()
