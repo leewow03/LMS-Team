@@ -25,11 +25,21 @@ HEADERS = {
 }
 
 def update_task_status(msg):
+    # 1. 메시지를 소문자로 변환
     lower_msg = msg.lower()
-    found_status = next((status for key, status in STATUS_MAP.items() if key in lower_msg), None)
+    
+    # 2. STATUS_MAP의 키(key)도 소문자로 변환해서 메시지와 비교 (가장 중요!)
+    found_status = next((status for key, status in STATUS_MAP.items() if key.lower() in lower_msg), None)
+    
+    # 3. ID 추출 (STA- 부분을 대소문자 무시하도록 re.IGNORECASE 추가)
     match = re.search(r'STA-(\d+)', msg, re.IGNORECASE)
-   
+    
     if not found_status or not match:
+        # 어디서 막혔는지 확인하기 위한 디버깅용 프린트
+        if not found_status:
+            print(f" [디버그] 상태 키워드를 찾지 못함 (메시지: {msg})")
+        if not match:
+            print(f" [디버그] ID(STA-숫자)를 찾지 못함 (메시지: {msg})")
         return
 
     task_number = match.group(1) # 숫자만 추출 (예: 5)
