@@ -25,8 +25,9 @@ HEADERS = {
 }
 
 def update_task_status(msg):
-    found_status = next((status for key, status in STATUS_MAP.items() if key in msg), None)
-    match = re.search(r'STA-(\d+)', msg)
+    lower_msg = msg.lower()
+    found_status = next((status for key, status in STATUS_MAP.items() if key in lower_msg), None)
+    match = re.search(r'STA-(\d+)', msg, re.IGNORECASE)
    
     if not found_status or not match:
         return
