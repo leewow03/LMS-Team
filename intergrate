@@ -27,20 +27,20 @@ HEADERS = {
 def update_task_status(msg):
     found_status = next((status for key, status in STATUS_MAP.items() if key in msg), None)
     match = re.search(r'STA-(\d+)', msg)
-    
+   
     if not found_status or not match:
         return
 
     task_number = match.group(1) # 숫자만 추출 (예: 5)
     clean_db_id = NOTION_STATUS_DB_ID.strip().replace("-", "")
-    
+   
     try:
         # [최적화] 필터링을 통해 해당 ID를 가진 페이지만 즉시 조회
         query_url = f"https://api.notion.com/v1/databases/{clean_db_id}/query"
         filter_payload = {
             "filter": {"property": "ID", "unique_id": {"equals": int(task_number)}}
         }
-        
+       
         res = requests.post(query_url, headers=HEADERS, json=filter_payload)
         results = res.json().get('results', [])
 
@@ -49,19 +49,19 @@ def update_task_status(msg):
             return
 
         target_page_id = results[0]['id']
-        
+       
         # 상태 업데이트
         update_url = f"https://api.notion.com/v1/pages/{target_page_id}"
         update_payload = {
             "properties": {"상태": {"status": {"name": found_status}}}
         }
-        
+       
         res_up = requests.patch(update_url, headers=HEADERS, json=update_payload)
         if res_up.status_code == 200:
             print(f"[{match.group()}] 상태 업데이트 완료: {found_status}")
         else:
             print(f" 실패: {res_up.text}")
-            
+           
     except Exception as e:
         print(f" 에러 발생: {e}")
 
@@ -75,7 +75,7 @@ def commit_to_notion(msg, author, url, date):
                 "Name": {"title": [{"text": {"content": msg}}]},
                 "Author": {"rich_text": [{"text": {"content": author}}]},
                 "URL": {"url": url},
-                "Date": {"date": {"start": date}} 
+                "Date": {"date": {"start": date}}
             }
         }
         res = requests.post(create_url, headers=HEADERS, json=payload)
@@ -88,11 +88,26 @@ def sync_to_notion():
     try:
         g = Github(auth=Auth.Token(GH_TOKEN))
         repo = g.get_repo(REPO_NAME)
-        # 최신 커밋 1개만 가져오기
-        latest_commit = repo.get_commits()[0]
+        
+        # [수정] 실행 시점의 정확한 커밋 SHA를 가져옵니다.
+        commit_sha = os.environ.get("COMMIT_SHA")
+        
+        if commit_sha:
+            # 전달받은 고유 ID로 커밋 객체를 직접 조회 (매우 정확함)
+            latest_commit = repo.get_commit(commit_sha)
+            print(f"작업 중인 커밋 SHA: {commit_sha}")
+        else:
+            # 로컬 실행 등 SHA가 없을 경우를 대비한 백업
+            latest_commit = repo.get_commits()[0]
         
         msg = latest_commit.commit.message
-        commit_to_notion(msg, latest_commit.commit.author.name, latest_commit.html_url, latest_commit.commit.author.date.isoformat())
+        author = latest_commit.commit.author.name
+        url = latest_commit.html_url
+        date = latest_commit.commit.author.date.isoformat()
+        
+        # 노션 로그 DB 기록
+        commit_to_notion(msg, author, url, date)
+        # 노션 작업 상태 업데이트
         update_task_status(msg)
         
     except Exception as e:
